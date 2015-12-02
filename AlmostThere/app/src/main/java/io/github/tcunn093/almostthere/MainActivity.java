@@ -12,7 +12,7 @@ import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 
-import android.graphics.drawable.ColorDrawable;
+import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
 
@@ -27,10 +27,13 @@ import android.view.Menu;
 import android.view.MenuItem;
 
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -40,10 +43,12 @@ import com.google.android.gms.appindexing.Action;
 import com.google.android.gms.appindexing.AppIndex;
 
 import com.google.android.gms.common.api.GoogleApiClient;
+import android.location.LocationListener;
 
 import java.util.Arrays;
 
-public class MainActivity extends AppCompatActivity {
+
+public class MainActivity extends AppCompatActivity{
 
     private AutoCompleteTextView actv;
 
@@ -59,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
 
     protected static final String TAG = "MainActivity";
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
@@ -67,19 +73,69 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        AdView mAdView = (AdView) findViewById(R.id.adView);
+        final AdView mAdView = (AdView) findViewById(R.id.adView);
+
+        hideKeyboard();
+
+        final Button reminderButton = (Button) findViewById(R.id.setReminderButton);
+        reminderButton.setEnabled(false);
+
+        final TextView explanationText = (TextView) findViewById(R.id.textView);
+        final TextView title = (TextView) findViewById(R.id.titletext);
+        final TextView for_oc = (TextView) findViewById(R.id.for_OC);
+
+        final RelativeLayout root = (RelativeLayout) findViewById(R.id.Main);
+
+
+        root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            public void onGlobalLayout() {
+
+                int heightDiff = root.getRootView().getHeight() - root.getHeight();
+
+                RelativeLayout.LayoutParams adparams = new RelativeLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+                RelativeLayout.LayoutParams inputparams = new RelativeLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, 500);
+
+
+                if (heightDiff > 268) {
+                    reminderButton.setVisibility(View.INVISIBLE);
+                    title.setVisibility(View.INVISIBLE);
+                    for_oc.setVisibility(View.INVISIBLE);
+                    explanationText.setVisibility(View.INVISIBLE);
+
+                    adparams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+
+
+                } else {
+                    title.setVisibility(View.VISIBLE);
+                    explanationText.setVisibility(View.VISIBLE);
+                    reminderButton.setVisibility(View.VISIBLE);
+                    for_oc.setVisibility(View.VISIBLE);
+
+                    adparams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+
+
+                }
+
+                mAdView.setLayoutParams(adparams);
+
+
+            }
+        });
+
+
         AdRequest request = new AdRequest.Builder()
-                .addTestDevice(AdRequest.DEVICE_ID_EMULATOR)        // All emulators
-                .addTestDevice("AC98C820A50B4AD8A2106EDE96FB87D4")  // My Galaxy Nexus test phone
+
                 .build();
-        //AdRequest adRequest = new AdRequest.Builder().build();
-        //mAdView.loadAd(adRequest);
+
+        mAdView.loadAd(request);
 
         actv = (AutoCompleteTextView) findViewById(R.id.search_box);
 
         TextView tv = (TextView) findViewById(R.id.titletext);
         Typeface custom_font = Typeface.createFromAsset(getAssets(), "fonts/ostrich-regular.ttf");
-
         tv.setTypeface(custom_font);
 
         StopsDatabase stops_db = new StopsDatabase(this);
@@ -89,13 +145,8 @@ public class MainActivity extends AppCompatActivity {
         final String[] stopsArray = StopsDatabase.getStops(" ", sql);
 
         ArrayAdapter adapter = new ArrayAdapter(getApplicationContext(), android.R.layout.simple_list_item_1, stopsArray);
-
         actv.setAdapter(adapter);
         actv.setThreshold(1);
-
-        final Button reminderButton = (Button) findViewById(R.id.setReminderButton);
-
-        reminderButton.setEnabled(false);
 
         actv.addTextChangedListener(new TextWatcher() {
 
@@ -109,14 +160,16 @@ public class MainActivity extends AppCompatActivity {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
 
                 String currentText = actv.getText().toString();
+                System.out.println(currentText.length());
+                reminderButton.setEnabled(false);
+                System.out.println(reminderButton.isEnabled());
 
-                if (!Arrays.asList(stopsArray).contains(currentText)) {
+                if (!Arrays.asList(stopsArray).contains(currentText) && currentText.length() > 0) {
                     actv.getBackground().setColorFilter(Color.parseColor("#ff9999"), PorterDuff.Mode.DARKEN);
                     actv.setTextColor(Color.WHITE);
 
-
-                } else if (currentText.length() == 0 || currentText.equals(R.string.search_hint)) {
-                    actv.getBackground().setColorFilter(Color.parseColor("#ffffff"), null);
+                } else if (currentText.length() == 0) {
+                    actv.getBackground().setColorFilter(Color.parseColor("#ffffff"), PorterDuff.Mode.DARKEN);
                     actv.setTextColor(Color.GRAY);
 
                 } else {
@@ -124,12 +177,9 @@ public class MainActivity extends AppCompatActivity {
                     actv.setTextColor(Color.BLACK);
                     lat = getLat(Long.parseLong(currentText.split(" ")[0]));
                     lon = getLon(Long.parseLong(currentText.split(" ")[0]));
+                    reminderButton.setEnabled(true);
 
-                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.RESULT_HIDDEN);
-
-                    imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
-
+                    hideKeyboard();
                 }
 
 
@@ -203,12 +253,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void afterTextChanged(Editable s) {
 
-                if (!actv.getText().toString().equals("")) {
-
-                    reminderButton.setEnabled(true);
-
-                }
-
             }
 
 
@@ -221,6 +265,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+
+    private void hideKeyboard(){
+
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.RESULT_HIDDEN);
+
+        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+
+    }
+
+
     private String proximityIntentAction = new String("io.github.tcunn093.action.PROXIMITY_ALERT");
 
     //On click function
@@ -230,16 +285,82 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter intentFilter = new IntentFilter(proximityIntentAction);
         MyBroadcastReceiver mbr = new MyBroadcastReceiver();
         registerReceiver(mbr, intentFilter);
+
+
+        final LocationManager locManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.ACCESS_FINE_LOCATION)) {
+
+                // Show an expanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+
+            } else {
+
+                // No explanation needed, we can request the permission.
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                        111);
+
+            }
+
+
+        }
+
+
+        LocationListener locationListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+
+            }
+
+            public void onStatusChanged(String provider, int status, Bundle extras) {
+
+            }
+
+            public void onProviderEnabled(String provider) {
+
+                if (provider.equals(LocationManager.GPS_PROVIDER)) {
+
+                    setProximity(locManager);
+
+                }
+
+            }
+
+
+            public void onProviderDisabled(String provider) {
+                if (provider.equals(LocationManager.GPS_PROVIDER)) {
+
+                    Toast.makeText(getApplicationContext(), "Almost There! requires a GPS Location. Please enable your GPS Location", Toast.LENGTH_LONG).show();
+
+                    startActivity(setGPS);
+
+                }
+
+            }
+
+            private Intent setGPS = new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+        };
+
+        locManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+
+        if (locManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            setProximity(locManager);
+        }
+
+    }
+
+    private void setProximity(LocationManager lm){
+
         Intent i2 = new Intent(proximityIntentAction);
         PendingIntent pi = PendingIntent.getBroadcast(this, 0, i2, 0);
 
-        LocationManager locManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-
-        locManager.addProximityAlert(lat, lon, 75, 1800000, pi);
+        lm.addProximityAlert(lat, lon, 120, 7200000, pi);
 
         Intent startMain = new Intent(Intent.ACTION_MAIN);
         startMain.addCategory(Intent.CATEGORY_HOME);
@@ -261,9 +382,13 @@ public class MainActivity extends AppCompatActivity {
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 
+
+
                 } else {
 
                     Toast.makeText(MainActivity.this, "GPS is required to use Almost There! app", Toast.LENGTH_LONG).show();
+                    System.exit(0);
+
                 }
                 return;
             }
@@ -292,6 +417,8 @@ public class MainActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
+
 
 
 
@@ -336,7 +463,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
     @Override
     protected void onResume(){
 
@@ -344,7 +470,6 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
-
 
 
 }
