@@ -5,19 +5,23 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
 
+import android.os.Build;
 import android.os.Bundle;
 
+import android.os.PowerManager;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
@@ -30,9 +34,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -45,7 +50,12 @@ import com.google.android.gms.appindexing.AppIndex;
 import com.google.android.gms.common.api.GoogleApiClient;
 import android.location.LocationListener;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import static android.widget.RelativeLayout.ALIGN_START;
 
 
 public class MainActivity extends AppCompatActivity{
@@ -64,6 +74,73 @@ public class MainActivity extends AppCompatActivity{
 
     protected static final String TAG = "MainActivity";
 
+    private List<String> getRecentStops(){
+
+        SharedPreferences shared = getPreferences(Context.MODE_PRIVATE);
+
+        List<String> recentStops = new ArrayList<>();
+
+        for (Map.Entry<String, ?> entry: shared.getAll().entrySet()){
+
+            recentStops.add(entry.getKey());
+            //System.out.println("checkkey " + entry.getKey());
+
+        }
+
+        return recentStops;
+
+    }
+
+    private void updateRecentStops(){
+
+        List<String> recent_stops = getRecentStops();
+        //System.out.println("updatedRecentstops triggered");
+        SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPref.edit();
+
+        int counter = 0;
+        String input = actv.getText().toString();
+        System.out.println(input + "updatedRecentstops");
+
+        if (recent_stops.isEmpty()){
+            editor.putInt(input, 1);
+        }else {
+
+            if (recent_stops.size() > 2 ){
+                //editor.clear();
+                recent_stops.remove(2);
+                recent_stops.add(0, input);
+
+            }
+
+            for (String s: recent_stops) {
+                System.out.println(s + "updatedRecentstops");
+                if (!recent_stops.contains(input)){
+                    editor.putInt(input, counter++);
+                    System.out.println("added updatedRecentstops");
+                }
+            }
+
+
+            }
+
+
+        editor.apply();
+
+
+    }
+
+    private void generateRecentStopsList(){
+
+
+        ArrayAdapter adapter = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1, getRecentStops());
+
+        ListView listView = (ListView) findViewById(R.id.recentstopslist);
+        listView.setAdapter(adapter);
+
+
+    }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,7 +149,6 @@ public class MainActivity extends AppCompatActivity{
 
         setContentView(R.layout.activity_main);
 
-
         final AdView mAdView = (AdView) findViewById(R.id.adView);
 
         hideKeyboard();
@@ -80,51 +156,21 @@ public class MainActivity extends AppCompatActivity{
         final Button reminderButton = (Button) findViewById(R.id.setReminderButton);
         reminderButton.setEnabled(false);
 
-        final TextView explanationText = (TextView) findViewById(R.id.textView);
+        final TextView explanationText = (TextView) findViewById(R.id.explanation);
         final TextView title = (TextView) findViewById(R.id.titletext);
         final TextView for_oc = (TextView) findViewById(R.id.for_OC);
 
         final RelativeLayout root = (RelativeLayout) findViewById(R.id.Main);
 
+        final RelativeLayout titleBar = (RelativeLayout) findViewById(R.id.titleBar);
 
-        root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            public void onGlobalLayout() {
+        final TextView explanation = (TextView) findViewById(R.id.explanation);
 
-                int heightDiff = root.getRootView().getHeight() - root.getHeight();
+        final RelativeLayout recentStops = (RelativeLayout) findViewById(R.id.recentstops);
 
-                RelativeLayout.LayoutParams adparams = new RelativeLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        final ListView recentStopsList = (ListView) findViewById(R.id.recentstopslist);
 
-                RelativeLayout.LayoutParams inputparams = new RelativeLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, 500);
-
-
-                if (heightDiff > 268) {
-                    reminderButton.setVisibility(View.INVISIBLE);
-                    title.setVisibility(View.INVISIBLE);
-                    for_oc.setVisibility(View.INVISIBLE);
-                    explanationText.setVisibility(View.INVISIBLE);
-
-                    adparams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-
-
-                } else {
-                    title.setVisibility(View.VISIBLE);
-                    explanationText.setVisibility(View.VISIBLE);
-                    reminderButton.setVisibility(View.VISIBLE);
-                    for_oc.setVisibility(View.VISIBLE);
-
-                    adparams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-
-
-                }
-
-                mAdView.setLayoutParams(adparams);
-
-
-            }
-        });
-
+        generateRecentStopsList();
 
         AdRequest request = new AdRequest.Builder()
 
@@ -134,9 +180,8 @@ public class MainActivity extends AppCompatActivity{
 
         actv = (AutoCompleteTextView) findViewById(R.id.search_box);
 
-        TextView tv = (TextView) findViewById(R.id.titletext);
         Typeface custom_font = Typeface.createFromAsset(getAssets(), "fonts/ostrich-regular.ttf");
-        tv.setTypeface(custom_font);
+        title.setTypeface(custom_font);
 
         StopsDatabase stops_db = new StopsDatabase(this);
 
@@ -144,23 +189,77 @@ public class MainActivity extends AppCompatActivity{
 
         final String[] stopsArray = StopsDatabase.getStops(" ", sql);
 
+        recentStopsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position,
+                                    long id) {
+
+                actv.setText(((TextView) view).getText().toString());
+
+
+            }
+        });
+
+
+        root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            public void onGlobalLayout() {
+
+                int rootViewHeight = root.getRootView().getHeight();
+                int rootHeight = root.getHeight();
+
+                int heightDiff = rootViewHeight - rootHeight;
+
+                RelativeLayout.LayoutParams adparams = new RelativeLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+                            if (heightDiff > 268) {
+                                heightDiff += mAdView.getHeight();
+                                reminderButton.setVisibility(View.GONE);
+                                titleBar.setVisibility(View.GONE);
+                                explanation.setVisibility(View.GONE);
+                                recentStops.setVisibility(View.GONE);
+
+                                Rect rectf = new Rect();
+                                actv.getLocalVisibleRect(rectf);
+                                actv.setDropDownHeight((rootViewHeight - rectf.bottom) - heightDiff);
+
+                            } else {
+
+                                titleBar.setVisibility(View.VISIBLE);
+                                reminderButton.setVisibility(View.VISIBLE);
+                                explanation.setVisibility(View.VISIBLE);
+                                recentStops.setVisibility(View.VISIBLE);
+
+                            }
+
+
+                        }
+
+        });
+
+
+
         ArrayAdapter adapter = new ArrayAdapter(getApplicationContext(), android.R.layout.simple_list_item_1, stopsArray);
         actv.setAdapter(adapter);
         actv.setThreshold(1);
 
         actv.addTextChangedListener(new TextWatcher() {
 
+            boolean ignoreNextTextChange = false;
+            String previous;
+
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
 
+                System.out.print(" after - start " + (after - start) + s);
+                previous = s.toString();
 
             }
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
 
-                String currentText = actv.getText().toString();
-                System.out.println(currentText.length());
+                String currentText = actv.getText().toString().toUpperCase();
                 reminderButton.setEnabled(false);
                 System.out.println(reminderButton.isEnabled());
 
@@ -173,13 +272,25 @@ public class MainActivity extends AppCompatActivity{
                     actv.setTextColor(Color.GRAY);
 
                 } else {
+
+                    System.out.println("Successfully greened");
+
+                    actv.dismissDropDown();
                     actv.getBackground().setColorFilter(Color.parseColor("#D0F5A9"), PorterDuff.Mode.DARKEN);
-                    actv.setTextColor(Color.BLACK);
+                    actv.setTextColor(Color.parseColor("#006600"));
                     lat = getLat(Long.parseLong(currentText.split(" ")[0]));
                     lon = getLon(Long.parseLong(currentText.split(" ")[0]));
                     reminderButton.setEnabled(true);
 
-                    hideKeyboard();
+                    actv.clearFocus();
+
+                    if (previous.length() != 0 && !Arrays.asList(stopsArray).contains(previous)) {
+                        hideKeyboard();
+                    }
+
+
+
+
                 }
 
 
@@ -253,6 +364,18 @@ public class MainActivity extends AppCompatActivity{
             @Override
             public void afterTextChanged(Editable s) {
 
+                System.out.println("'after" + s.toString());
+
+                if (Arrays.asList(stopsArray).contains(s)){
+
+                    actv.clearFocus();
+                    hideKeyboard();
+
+
+                }
+
+
+
             }
 
 
@@ -276,12 +399,15 @@ public class MainActivity extends AppCompatActivity{
     }
 
 
+
+
     private String proximityIntentAction = new String("io.github.tcunn093.action.PROXIMITY_ALERT");
 
     //On click function
     public void onClick(View view) {
 
-        System.out.println("Button clicked");
+
+        updateRecentStops();
         IntentFilter intentFilter = new IntentFilter(proximityIntentAction);
         MyBroadcastReceiver mbr = new MyBroadcastReceiver();
         registerReceiver(mbr, intentFilter);
@@ -360,7 +486,9 @@ public class MainActivity extends AppCompatActivity{
         Intent i2 = new Intent(proximityIntentAction);
         PendingIntent pi = PendingIntent.getBroadcast(this, 0, i2, 0);
 
-        lm.addProximityAlert(lat, lon, 120, 7200000, pi);
+        startService(new Intent(this, PowerManagerService.class));
+
+        lm.addProximityAlert(lat, lon, 150, 10800000, pi);
 
         Intent startMain = new Intent(Intent.ACTION_MAIN);
         startMain.addCategory(Intent.CATEGORY_HOME);
@@ -386,8 +514,8 @@ public class MainActivity extends AppCompatActivity{
 
                 } else {
 
-                    Toast.makeText(MainActivity.this, "GPS is required to use Almost There! app", Toast.LENGTH_LONG).show();
-                    System.exit(0);
+                    Toast.makeText(MainActivity.this, "GPS Permission is required to use Almost There! app", Toast.LENGTH_LONG).show();
+                    this.finish();
 
                 }
                 return;
@@ -458,6 +586,7 @@ public class MainActivity extends AppCompatActivity{
                 // TODO: Make sure this auto-generated app deep link URI is correct.
                 Uri.parse("android-app://io.github.tcunn093.almostthere/http/host/path")
         );
+
         AppIndex.AppIndexApi.end(client, viewAction);
         client.disconnect();
     }

@@ -62,13 +62,13 @@ public class StopsDatabase extends SQLiteAssetHelper {
         System.out.println("count: " + c.getCount());
         String data;
 
-        if (c.isAfterLast() == false) {
+        if (!c.isAfterLast()) {
             do {
 
                 data = c.getString(c.getColumnIndex(FeedReaderContract.FeedEntry.COLUMN_NAME_STOP_CODE)) + " " + c.getString(c.getColumnIndex(FeedReaderContract.FeedEntry.COLUMN_NAME_STOP_NAME)).replace("\"", "");
 
                 stopsList.add(data);
-                System.out.println(data);
+                System.out.println("data" + data);
 
             } while (c.moveToNext());
         }
